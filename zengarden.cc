@@ -1,5 +1,6 @@
-//#include <math>
-//#include <cstdlib>
+#include <cassert>
+#include <cmath>
+#include <cstdlib>
 #include <limits>
 #include <utility>
 
@@ -7,6 +8,8 @@
 #include "zengarden.hh"
 namespace garden {
 namespace geometry {
+
+point::point(std::initializer_list<int> init) : x(*(init.begin())), y(*(init.begin() + 1)) {}
 
 //P_x = ((x_1 y_2) - (y_1 x_2))(x_3 - x_4) - (x_1 - x_2)((x_3 y_4- (y_3 x_4))
 //      ---------------------------------------------------------------------
@@ -43,8 +46,8 @@ bool inBoundingBox(const box& b, const point& test) {
   return inBoundingBox(b.first, b.second, test);
 }
 bool inBoundingBox(const point& p1, const point& p2, const point& test) {
-  return std::min(p1.x, p2.x) <= intersection.x && intersection.x <= std::min(p1.x, p2.x) &&
-      std::min(p1.y, p2.y) <= intersection.y && intersection.y <= std::min(p1.y, p2.y);
+  return std::min(p1.x, p2.x) <= test.x && test.x <= std::min(p1.x, p2.x) &&
+      std::min(p1.y, p2.y) <= test.y && test.y <= std::min(p1.y, p2.y);
 }
 //given two line segments l1 and l2 and a point of intersection between them,
 //returns true if the intersection point is actually on one of the two lines.
@@ -53,7 +56,7 @@ bool segmentIntersects(const line& l1, const line& l2, const point& intersection
 }
 
 bool segmentIntersects(const line& l1, const line& l2) {
-  return segmentIntersects(l1, l2, intersection);
+  return segmentIntersects(l1, l2, intersection(l1, l2));
 }
 
 }
@@ -70,18 +73,17 @@ int closer(const int a, const int b, const int x) {
   return (std::abs(a - x) < std::abs(b - x)) ? a : b;
 }
 
-ray generateRandomRayFromOrigin(drand48_data* d, const box& bounding) {
-  long int rx, ry;
-  mrand48_r(&drand48_data, &rx);
-  mrand48_r(&drand48_data, &ry);
+ray generateRandomRayFromOrigin(unsigned int* d, const box& bounding) {
+  int rx = rand_r(d);
+  int ry = rand_r(d);
     
-  if(inBoundingBox({rx, ry}, bounding)) {
+  if(inBoundingBox(bounding, {static_cast<int>(rx), static_cast<int>(ry)})) {
     int factor = std::max(scaleFactor(closer(bounding.first.x, bounding.second.x, rx), rx),
                           scaleFactor(closer(bounding.first.y, bounding.second.y, ry), ry));
     
-    return {{0, 0}, {rx * factor, ry * factor}};
+    return {{{0, 0}, {rx * factor, ry * factor}}};
   }
-  return {{0, 0}, {rx, ry}};
+  return {{{0, 0}, {rx, ry}}};
 }
 //generate a vector of random rays starting at (0, 0) and ending at a random point
 //outside the bounding box
@@ -89,7 +91,7 @@ std::vector<ray> initialRays(const unsigned int rays, const box& bounding) {
   std::vector<ray> retval;
   retval.reserve(rays);
   
-  drand48_data d;
+  unsigned int d;
   
   for(unsigned int i = 0; i < rays; ++i)
     retval.push_back(generateRandomRayFromOrigin(&d, bounding));
@@ -103,17 +105,17 @@ std::vector<ray> initialRays(const unsigned int rays, const box& bounding) {
 std::vector<std::pair<size_t, point> > collisions(const std::vector<surface>& surfaces,
                                                const std::vector<ray>& rays) {
   std::vector<std::pair<size_t, point> > retval;
-  retval.reserve(rays);
-  for(auto& r : rays) {
+  retval.reserve(rays.size());
+  for(auto rIt = rays.begin(); rIt != rays.end(); ++rIt) {
     bool collided = false;
     for(auto sIt = surfaces.begin(); sIt != surfaces.end() && !collided; ++sIt) {
-      point p = intersection(r.pos, sIt->pos);
-      collided = segmentIntersects(r.pos, sIt->.pos, p);
+      point p = intersection(rIt->pos, sIt->pos);
+      collided = segmentIntersects(rIt->pos, sIt->pos, p);
       if(collided)
         retval.push_back({std::distance(surfaces.begin(), sIt), p});
     }
     if(!collided)
-      retval.push_back(std::numeric_limits<size_t>::max(), {0, 0});
+      retval.push_back({std::numeric_limits<size_t>::max(), {0, 0}});
   }
   return retval;
 }

@@ -6,7 +6,10 @@
 namespace garden {
 namespace geometry {
 
-struct point {int x, y;};
+struct point {
+  int x, y;
+  point(std::initializer_list<int> init);
+};
 struct line {point start, end;};
 typedef std::pair<point, point> box;
 
