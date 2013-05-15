@@ -1,6 +1,7 @@
 #ifndef _ZENGARDEN_H_
 #define _ZENGARDEN_H_
 
+#include <initializer_list>
 #include <vector>
 
 namespace garden {
