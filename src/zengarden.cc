@@ -4,12 +4,44 @@
 #include <limits>
 #include <utility>
 
-
 #include "zengarden.hh"
+
 namespace garden {
 namespace geometry {
 
 point::point(std::initializer_list<int> init) : x(*(init.begin())), y(*(init.begin() + 1)) {}
+point::point() : x(0), y(0) {}
+bool point::operator==(const point& other) const {
+  return x == other.x && y == other.y;
+}
+
+std::ostream& operator<<(std::ostream& os, const point& p) {
+  os << "(" << p.x << ", " << p.y << ")";
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const box& b) {
+  os << "(" << b.first << " " << b.second << ")";
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const line& l) {
+  os << l.start << " -> " << l.end;
+  return os;
+}
+
+line::line() : start(), end() {}
+
+line::line(std::initializer_list<point> points)
+    : start(*(points.begin())), end(*(points.begin() + 1)) {}
+
+//use float?
+double line::slope() const {
+  return (end.x == start.x ? std::numeric_limits<double>::quiet_NaN() :
+          static_cast<double>(end.y - start.y) / static_cast<double>(end.x - start.x));
+}
+
+//two lines L1 ((x_1, y_1) -> (x_2, y_2)) and L2 ((x_3, y_3) -> (x_4, y_4))
 
 //P_x = ((x_1 y_2) - (y_1 x_2))(x_3 - x_4) - (x_1 - x_2)((x_3 y_4- (y_3 x_4))
 //      ---------------------------------------------------------------------
@@ -24,9 +56,9 @@ point::point(std::initializer_list<int> init) : x(*(init.begin())), y(*(init.beg
 //as it determines the intersection point between the two infinite lines that contain l1 and l2
 point intersection(const line& l1, const line& l2) {
   int l1xdiff = l1.start.x - l1.end.x;
-  int l1ydiff = l1.end.y - l1.end.y;
+  int l1ydiff = l1.start.y - l1.end.y;
   int l2xdiff = l2.start.x - l2.end.x;
-  int l2ydiff = l2.end.y - l2.end.y;
+  int l2ydiff = l2.start.y - l2.end.y;
   
   int denom = (l1xdiff * l2ydiff) - (l1ydiff * l2xdiff);
 
@@ -46,8 +78,8 @@ bool inBoundingBox(const box& b, const point& test) {
   return inBoundingBox(b.first, b.second, test);
 }
 bool inBoundingBox(const point& p1, const point& p2, const point& test) {
-  return std::min(p1.x, p2.x) <= test.x && test.x <= std::min(p1.x, p2.x) &&
-      std::min(p1.y, p2.y) <= test.y && test.y <= std::min(p1.y, p2.y);
+  return std::min(p1.x, p2.x) <= test.x && test.x <= std::max(p1.x, p2.x) &&
+      std::min(p1.y, p2.y) <= test.y && test.y <= std::max(p1.y, p2.y);
 }
 //given two line segments l1 and l2 and a point of intersection between them,
 //returns true if the intersection point is actually on one of the two lines.

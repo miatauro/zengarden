@@ -269,6 +269,10 @@ void generate(size_t n, std::vector<A>& out)
    }
 }
 
+template <class A>
+void generate(size_t n, std::pair<A, A>& p) {
+  generate(n, p.first);
+  generate(n, p.second);
 }
-
+}
 #endif // !QUICKCHECK_GENERATE_H
