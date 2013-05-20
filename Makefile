@@ -31,8 +31,9 @@ obj-dir-transform = $(foreach src,$(1), $(subst $(DEVELOPMENT_DIR),$(OBJ_DIR), $
 
 EXTERN_DIR := $(DEVELOPMENT_DIR)/extern
 QUICKCHECK_DIR := $(EXTERN_DIR)/quickcheck
+GTEST_DIR := $(EXTERN_DIR)/gtest-1.6.0
 
-CXXFLAGS += -ggdb3 -Wall --std=c++11
+CXXFLAGS += -ggdb3 -Wall --std=c++11 -D_USE_MATH_DEFINES
 
 LIB_SRCS := $(wildcard $(SRC_DIR)/*.cc)
 LIB_INCLUDE_DIRS := -I$(SRC_DIR)
@@ -48,8 +49,12 @@ $(LIB_NAME): $(SRC_DIR) $(LIB_OBJS)
 	$(AR) -ruvs $@ $(filter-out $<,$?)
 	$(RANLIB) $@
 
+GTEST_LIB := $(GTEST_DIR)/make/gtest.a
+$(GTEST_LIB):
+	make -C $(GTEST_DIR)/make gtest.a
+
 TEST_SRCS := $(wildcard $(TEST_DIR)/*.cc) 
-TEST_INCLUDE_DIRS := -I$(SRC_DIR) -I$(TEST_DIR) -I$(QUICKCHECK_DIR)
+TEST_INCLUDE_DIRS := -I$(SRC_DIR) -I$(TEST_DIR) -I$(QUICKCHECK_DIR) -I$(GTEST_DIR)/include
 TEST_OBJS = $(call obj-dir-transform,$(TEST_SRCS))
 TEST_CXXFLAGS := $(CXXFLAGS) $(TEST_INCLUDE_DIRS)
 TEST_BINARY := zentest
@@ -58,8 +63,9 @@ $(TEST_OBJS): override CXXFLAGS = $(TEST_CXXFLAGS)
 
 -include $(LIB_OBJS:.o=.P)
 
-$(TEST_BINARY): $(TEST_OBJS) $(LIB_NAME)
-	$(LD) $(LDFLAGS) $^ -o $(TEST_BINARY)
+TEST_LDFLAGS = $(LDFLAGS) -pthread
+$(TEST_BINARY): $(TEST_OBJS) $(LIB_NAME) $(GTEST_LIB)
+	$(LD) $(TEST_LDFLAGS) $^ -o $(TEST_BINARY)
 
 
 clean:

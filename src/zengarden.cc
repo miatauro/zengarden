@@ -15,6 +15,7 @@ bool point::operator==(const point& other) const {
   return x == other.x && y == other.y;
 }
 
+
 std::ostream& operator<<(std::ostream& os, const point& p) {
   os << "(" << p.x << ", " << p.y << ")";
   return os;
@@ -39,6 +40,15 @@ line::line(std::initializer_list<point> points)
 double line::slope() const {
   return (end.x == start.x ? std::numeric_limits<double>::quiet_NaN() :
           static_cast<double>(end.y - start.y) / static_cast<double>(end.x - start.x));
+}
+
+int line::dot(const line& o) const {
+  return (end.x - start.x) * (o.end.x - o.start.x) +
+      (end.y - start.y) * (o.end.y - o.end.y);
+}
+
+double line::length() const {
+return  std::sqrt(std::pow(end.x - start.x, 2) + std::pow(end.y - start.y, 2));
 }
 
 //two lines L1 ((x_1, y_1) -> (x_2, y_2)) and L2 ((x_3, y_3) -> (x_4, y_4))
@@ -89,6 +99,11 @@ bool segmentIntersects(const line& l1, const line& l2, const point& intersection
 
 bool segmentIntersects(const line& l1, const line& l2) {
   return segmentIntersects(l1, l2, intersection(l1, l2));
+}
+
+double angleBetween(const line& l1, const line& l2) {
+  double retval = std::acos(l1.dot(l2) / (l1.length() * l2.length()));
+  return retval;
 }
 
 }
