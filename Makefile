@@ -33,10 +33,10 @@ EXTERN_DIR := $(DEVELOPMENT_DIR)/extern
 QUICKCHECK_DIR := $(EXTERN_DIR)/quickcheck
 GTEST_DIR := $(EXTERN_DIR)/gtest-1.6.0
 
-CXXFLAGS += -ggdb3 -Wall --std=c++11 -D_USE_MATH_DEFINES
+CXXFLAGS += -ggdb3 -Wall --std=c++11 -D_USE_MATH_DEFINES --coverage -O0
 
 LIB_SRCS := $(wildcard $(SRC_DIR)/*.cc)
-LIB_INCLUDE_DIRS := -I$(SRC_DIR)
+LIB_INCLUDE_DIRS := -I$(SRC_DIR) -I/usr/local/include
 LIB_OBJS := $(call obj-dir-transform,$(LIB_SRCS))
 LIB_CXXFLAGS := $(CXXFLAGS) $(LIB_INCLUDE_DIRS)
 LIB_NAME := zengarden.a
@@ -54,7 +54,7 @@ $(GTEST_LIB):
 	make -C $(GTEST_DIR)/make gtest.a
 
 TEST_SRCS := $(wildcard $(TEST_DIR)/*.cc) 
-TEST_INCLUDE_DIRS := -I$(SRC_DIR) -I$(TEST_DIR) -I$(QUICKCHECK_DIR) -I$(GTEST_DIR)/include
+TEST_INCLUDE_DIRS := -I$(SRC_DIR) -I$(TEST_DIR) -I$(QUICKCHECK_DIR) -I$(GTEST_DIR)/include -I/usr/local/include
 TEST_OBJS = $(call obj-dir-transform,$(TEST_SRCS))
 TEST_CXXFLAGS := $(CXXFLAGS) $(TEST_INCLUDE_DIRS)
 TEST_BINARY := zentest
@@ -63,9 +63,9 @@ $(TEST_OBJS): override CXXFLAGS = $(TEST_CXXFLAGS)
 
 -include $(LIB_OBJS:.o=.P)
 
-TEST_LDFLAGS = $(LDFLAGS) -pthread
+TEST_LDFLAGS = $(LDFLAGS) -pthread -lgcov
 $(TEST_BINARY): $(TEST_OBJS) $(LIB_NAME) $(GTEST_LIB)
-	$(LD) $(TEST_LDFLAGS) $^ -o $(TEST_BINARY)
+	$(LD) $^ -o $(TEST_BINARY) $(TEST_LDFLAGS)
 
 
 clean:
@@ -78,3 +78,7 @@ test: $(TEST_BINARY)
 
 run-test: $(TEST_BINARY)
 	./$(TEST_BINARY)
+
+run-coverage: run-test
+	gcovr -d -r $(DEVELOPMENT_DIR)
+#	lcov --capture --directory $(DEVELOPMENT_DIR) --output-file coverage.info

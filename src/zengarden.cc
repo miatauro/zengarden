@@ -4,6 +4,10 @@
 #include <limits>
 #include <utility>
 
+#include <boost/random/mersenne_twister.hpp>
+#include <boost/random/uniform_int_distribution.hpp>
+#include <boost/random/variate_generator.hpp>
+
 #include "zengarden.hh"
 
 namespace garden {
@@ -11,10 +15,26 @@ namespace geometry {
 
 point::point(std::initializer_list<int> init) : x(*(init.begin())), y(*(init.begin() + 1)) {}
 point::point() : x(0), y(0) {}
+
+point point::operator+(const point& other) const {
+  return {x + other.x, y + other.y};
+}
+
+point point::operator-(const point& other) const {
+  return {x - other.x, y - other.y};
+}
+
+point point::operator*(const int other) const {
+  return {x * other, y * other};
+}
+
 bool point::operator==(const point& other) const {
   return x == other.x && y == other.y;
 }
 
+double distance(const point& p1, const point& p2) {
+  return std::sqrt(std::pow(p2.x - p1.x, 2) + std::pow(p2.y - p1.y, 2));  
+}
 
 std::ostream& operator<<(std::ostream& os, const point& p) {
   os << "(" << p.x << ", " << p.y << ")";
@@ -44,11 +64,44 @@ double line::slope() const {
 
 int line::dot(const line& o) const {
   return (end.x - start.x) * (o.end.x - o.start.x) +
-      (end.y - start.y) * (o.end.y - o.end.y);
+      (end.y - start.y) * (o.end.y - o.start.y);
 }
 
 double line::length() const {
-return  std::sqrt(std::pow(end.x - start.x, 2) + std::pow(end.y - start.y, 2));
+  return distance(start, end);
+}
+
+point line::mid() const {
+  return {(start.x + end.x) / 2, (start.y + end.y) / 2};
+}
+
+line line::normal() const {
+  point n({-(end.y - start.y), (end.x - start.x)});
+  return line({mid(), n + mid()});
+}
+
+line line::operator+(const point& p) const {
+  return {start + p, end + p};
+}
+
+line line::operator-(const point& p) const {
+  return {start - p, end - p};
+}
+
+line line::operator*(const int n) const {
+  return {start, end * n};
+}
+
+line line::operator-(const line& l) const {
+  return {start, end - l.end};
+}
+
+line line::moveToStart(const point& p) const {
+  return {p, {end.x + (p.x - start.x), end.y + (p.y - start.y)}};
+}
+
+bool line::operator==(const line& l) const {
+  return start == l.start && end == l.end;
 }
 
 //two lines L1 ((x_1, y_1) -> (x_2, y_2)) and L2 ((x_3, y_3) -> (x_4, y_4))
@@ -94,7 +147,7 @@ bool inBoundingBox(const point& p1, const point& p2, const point& test) {
 //given two line segments l1 and l2 and a point of intersection between them,
 //returns true if the intersection point is actually on one of the two lines.
 bool segmentIntersects(const line& l1, const line& l2, const point& intersection) {
-  return inBoundingBox(l1.start, l1.end, intersection);
+  return inBoundingBox(l1.start, l1.end, intersection) && inBoundingBox(l2.start, l2.end, intersection);
 }
 
 bool segmentIntersects(const line& l1, const line& l2) {
@@ -109,63 +162,138 @@ double angleBetween(const line& l1, const line& l2) {
 }
 
 namespace rays {
+std::ostream& operator<<(std::ostream& os, const ray& r) {
+  return os << r.pos;
+}
+
 using namespace geometry;
 
 int scaleFactor(const int a, const int b) {
   assert((a >= 0 && b >= 0) || (a <= 0 && b <= 0));
-  return static_cast<int>(std::ceil(static_cast<double>(a) / static_cast<double>(b)));
+  return (b == 0 ?
+          std::numeric_limits<int>::max() :
+          static_cast<int>(std::ceil(static_cast<double>(a) / static_cast<double>(b))));
 }
 
 int closer(const int a, const int b, const int x) {
   return (std::abs(a - x) < std::abs(b - x)) ? a : b;
 }
 
-ray generateRandomRayFromOrigin(unsigned int* d, const box& bounding) {
-  int rx = rand_r(d);
-  int ry = rand_r(d);
-    
-  if(inBoundingBox(bounding, {static_cast<int>(rx), static_cast<int>(ry)})) {
-    int factor = std::max(scaleFactor(closer(bounding.first.x, bounding.second.x, rx), rx),
-                          scaleFactor(closer(bounding.first.y, bounding.second.y, ry), ry));
-    
-    return {{{0, 0}, {rx * factor, ry * factor}}};
-  }
-  return {{{0, 0}, {rx, ry}}};
+ray moveRayEndOutsideBox(const ray& r, const geometry::box& bounding) {
+  int factor = std::min(scaleFactor(closer(bounding.first.x, bounding.second.x, r.pos.end.x),
+                                    r.pos.end.x),
+                        scaleFactor(closer(bounding.first.y, bounding.second.y, r.pos.end.y),
+                                    r.pos.end.y));
+  return {{r.pos.start, {r.pos.end.x * factor, r.pos.end.y * factor}}};
 }
+
+ray generateRandomRayFromOrigin(const std::function<int()>& randomSource, const box& bounding) {
+  int rx = randomSource(), ry = randomSource();
+
+  while(rx == 0 && ry == 0) {
+    rx = randomSource();
+    ry = randomSource();
+  }
+  
+  ray r{{{0, 0}, {rx, ry}}};
+  
+  if(inBoundingBox(bounding, r.pos.end))
+    r = moveRayEndOutsideBox(r, bounding);
+
+  return r;
+}
+
 //generate a vector of random rays starting at (0, 0) and ending at a random point
 //outside the bounding box
 std::vector<ray> initialRays(const unsigned int rays, const box& bounding) {
+  using namespace boost::random;
   std::vector<ray> retval;
   retval.reserve(rays);
   
-  unsigned int d;
-  
+  mt19937 gen;
+  uniform_int_distribution<int> dist(std::numeric_limits<int>::min(),
+                                     std::numeric_limits<int>::max());
+  variate_generator<mt19937, uniform_int_distribution<int>> generator(gen, dist);
+  std::function<int()> fn(generator);
+
   for(unsigned int i = 0; i < rays; ++i)
-    retval.push_back(generateRandomRayFromOrigin(&d, bounding));
+    retval.push_back(generateRandomRayFromOrigin(fn,
+                                                 bounding));
 
   return retval;
 }
 
 //generate a vector of surface indices indicating which surfaces bounce which rays
-//-1 indicates that a ray intersects no surface
+//max indicates that a ray intersects no surface
 //and at which point they intersect
 std::vector<std::pair<size_t, point> > collisions(const std::vector<surface>& surfaces,
                                                const std::vector<ray>& rays) {
   std::vector<std::pair<size_t, point> > retval;
   retval.reserve(rays.size());
   for(auto rIt = rays.begin(); rIt != rays.end(); ++rIt) {
-    bool collided = false;
-    for(auto sIt = surfaces.begin(); sIt != surfaces.end() && !collided; ++sIt) {
+    bool rayCollided = false;
+    for(auto sIt = surfaces.begin(); sIt != surfaces.end(); ++sIt) {
       point p = intersection(rIt->pos, sIt->pos);
-      collided = segmentIntersects(rIt->pos, sIt->pos, p);
-      if(collided)
-        retval.push_back({std::distance(surfaces.begin(), sIt), p});
+      bool collided = segmentIntersects(rIt->pos, sIt->pos, p);
+      if(collided) {
+        if(rayCollided &&
+           distance(rIt->pos.start, p) < distance(rIt->pos.start, retval.back().second)) {
+          retval.back().first = std::distance(surfaces.begin(), sIt);
+          retval.back().second = p;
+        }
+        else {
+          retval.push_back({std::distance(surfaces.begin(), sIt), p});
+          rayCollided = true;
+        }
+      }
     }
-    if(!collided)
+    if(!rayCollided)
       retval.push_back({std::numeric_limits<size_t>::max(), {0, 0}});
   }
   return retval;
 }
+
+ray bounce(const surface& surface, const ray& inputRay,
+           const geometry::point& collision) {
+  if(surface.type == surface_type::REFLECT)
+    return reflect(surface, inputRay, collision);
+  else
+    return refract(surface, inputRay, collision);
+  return inputRay;
+}
+
+ray reflect(const surface& surface, const ray& inputRay) {
+  return reflect(surface, inputRay, intersection(surface.pos, inputRay.pos));
+}
+
+ray reflect(const surface& surface, const ray& inputRay,
+            const geometry::point& collision) {
+  geometry::line normal = surface.pos.normal().moveToStart(collision);
+  geometry::line reflection = inputRay.pos - (normal * 2 * inputRay.pos.dot(normal));
+  return {reflection};
+}
+ray refract(const surface& surface, const ray& inputRay,
+            const geometry::point& collision) {
+  return inputRay;
+}
+
+std::vector<ray> bounceAll(const std::vector<surface>& surfaces,
+                           const std::vector<ray>& inputRays,
+                           const std::vector<std::pair<size_t, geometry::point> >& collisions) {
+  std::vector<ray> retval;
+  retval.reserve(collisions.size());
+  
+  for(auto it = collisions.begin(); it != collisions.end(); ++it) {
+    //optimization: break this up into bounces that return one value and ones that return more
+    if(it->first != std::numeric_limits<size_t>::max()) {
+      retval.push_back(bounce(surfaces[it->first],
+                              inputRays[std::distance(collisions.begin(), it)],
+                              it->second));
+    }
+  }
+  return retval;
+}
+
 
 }
 }
